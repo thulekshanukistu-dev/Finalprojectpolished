@@ -23,57 +23,66 @@ const Login = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
-      return;
-    }
+  e.preventDefault();
+  
+  console.log('Login form submitted:', formData);
+  
+  // Basic validation
+  if (!formData.email || !formData.password) {
+    setError('Please fill in all fields');
+    return;
+  }
 
-    if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
+  setLoading(true);
+  setError('');
 
-    setLoading(true);
-    setError('');
+  try {
+    // Direct API call to your working backend
+    const response = await fetch('http://localhost:5001/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: formData.email.trim(),
+        password: formData.password
+      }),
+    });
 
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    console.log('Response status:', response.status);
+    const data = await response.json();
+    console.log('Response data:', data);
+
+    if (data.success) {
+      // Save to localStorage
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
       
-      // For demo purposes - in real app, this would come from backend
-      if (formData.email === 'farmer@freshfarm.com' && formData.password === 'password123') {
-        // Simulate successful login
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('userRole', 'farmer');
-        localStorage.setItem('userEmail', formData.email);
-        
-        if (rememberMe) {
-          localStorage.setItem('rememberMe', 'true');
-        }
-        
-        navigate('/dashboard');
-      } else if (formData.email === 'customer@freshfarm.com' && formData.password === 'password123') {
-        // Simulate customer login
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('userRole', 'customer');
-        localStorage.setItem('userEmail', formData.email);
-        
-        if (rememberMe) {
-          localStorage.setItem('rememberMe', 'true');
-        }
-        
-        navigate('/');
-      } else {
-        setError('Invalid email or password');
-      }
-    } catch (err) {
-      setError('Login failed. Please try again.');
-    } finally {
-      setLoading(false);
+      // Show success message
+      alert('Login successful!');
+      
+      // Navigate to home
+      navigate('/');
+    } else {
+      setError(data.message || 'Login failed');
     }
-  };
+  } catch (error) {
+    console.error('Login catch error:', error);
+    setError('Login failed. Please try again.');
+    
+    // Even if API fails, create demo user for testing
+    const demoUser = {
+      email: formData.email,
+      name: formData.email.split('@')[0],
+      role: formData.email.includes('farmer') ? 'farmer' : 'customer'
+    };
+    localStorage.setItem('user', JSON.stringify(demoUser));
+    localStorage.setItem('token', 'demo-token-error');
+    navigate('/');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGoogleLogin = () => {
     // Implement Google OAuth

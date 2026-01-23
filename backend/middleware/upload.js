@@ -3,22 +3,30 @@ const path = require('path');
 const fs = require('fs');
 
 // Create uploads directory if it doesn't exist
-const uploadDir = 'uploads';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const createUploadsDir = () => {
+  const uploadDirs = ['uploads', 'uploads/profiles', 'uploads/products', 'uploads/temp'];
+  
+  uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+};
+
+createUploadsDir();
 
 // Set storage engine
 const storage = multer.diskStorage({
   destination: function(req, file, cb) {
-    let folder = 'uploads';
+    let folder = 'uploads/temp';
     
     if (file.fieldname === 'profileImage') {
       folder = 'uploads/profiles';
-    } else if (file.fieldname === 'productImages') {
+    } else if (file.fieldname === 'images') {
       folder = 'uploads/products';
     }
     
+    // Ensure directory exists
     if (!fs.existsSync(folder)) {
       fs.mkdirSync(folder, { recursive: true });
     }
@@ -27,7 +35,8 @@ const storage = multer.diskStorage({
   },
   filename: function(req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
   }
 });
 
@@ -50,7 +59,10 @@ function checkFileType(file, cb) {
 // Init upload
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { 
+    fileSize: parseInt(process.env.MAX_FILE_UPLOAD) || 5 * 1024 * 1024, // 5MB default
+    files: 5 // Max 5 files
+  },
   fileFilter: function(req, file, cb) {
     checkFileType(file, cb);
   }
@@ -72,7 +84,17 @@ exports.handleUploadError = (err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File size too large. Maximum size is 5MB'
+        message: `File size too large. Maximum size is ${process.env.MAX_FILE_UPLOAD || 5}MB`
+      });
+    } else if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        message: `Too many files. Maximum is ${err.limit} files`
+      });
+    } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Unexpected file field'
       });
     }
     return res.status(400).json({
@@ -88,54 +110,19 @@ exports.handleUploadError = (err, req, res, next) => {
   next();
 };
 
-// Cloudinary upload middleware (if using cloudinary)
-exports.cloudinaryUpload = async (req, res, next) => {
-  if (!req.file && !req.files) {
-    return next();
-  }
-
-  try {
-    const cloudinary = require('../config/cloudinary');
-    
-    if (req.file) {
-      // Single file upload
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: `freshfarm/${req.file.fieldname === 'profileImage' ? 'profiles' : 'products'}`,
-        width: 800,
-        crop: "scale"
-      });
-      
-      req.file.cloudinaryUrl = result.secure_url;
-      req.file.publicId = result.public_id;
-      
-      // Delete local file after upload
-      fs.unlinkSync(req.file.path);
-    }
-    
-    if (req.files && req.files.length > 0) {
-      // Multiple files upload
-      const uploadPromises = req.files.map(async (file) => {
-        const result = await cloudinary.uploader.upload(file.path, {
-          folder: 'freshfarm/products',
-          width: 800,
-          crop: "scale"
-        });
-        
-        file.cloudinaryUrl = result.secure_url;
-        file.publicId = result.public_id;
-        
-        // Delete local file after upload
+// Clean up temporary files after upload
+exports.cleanupTempFiles = (req, res, next) => {
+  if (req.files) {
+    req.files.forEach(file => {
+      if (file.path && fs.existsSync(file.path) && file.path.includes('temp')) {
         fs.unlinkSync(file.path);
-        
-        return file.cloudinaryUrl;
-      });
-      
-      const uploadedUrls = await Promise.all(uploadPromises);
-      req.body.images = uploadedUrls;
-    }
-    
-    next();
-  } catch (error) {
-    next(error);
+      }
+    });
   }
+  
+  if (req.file && req.file.path && fs.existsSync(req.file.path) && req.file.path.includes('temp')) {
+    fs.unlinkSync(req.file.path);
+  }
+  
+  next();
 };

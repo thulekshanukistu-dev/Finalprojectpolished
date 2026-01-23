@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
-const ProductModal = ({ isOpen, product, onClose }) => {
+const ProductModal = ({ isOpen, product, onClose, onAddToCart }) => {
+  const [quantity, setQuantity] = useState(1);
+
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isOpen) {
@@ -12,7 +14,33 @@ const ProductModal = ({ isOpen, product, onClose }) => {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  // Reset quantity when product changes
+  useEffect(() => {
+    setQuantity(1);
+  }, [product]);
+
   if (!isOpen || !product) return null;
+
+  const handleQuantityChange = (type) => {
+    if (type === 'increase') {
+      setQuantity(prev => prev + 1);
+    } else if (type === 'decrease') {
+      setQuantity(prev => Math.max(1, prev - 1));
+    }
+  };
+
+  const handleAddToCartClick = () => {
+    if (onAddToCart) {
+      onAddToCart(product, quantity);
+    }
+  };
+
+  const handleBuyNowClick = () => {
+    if (onAddToCart) {
+      onAddToCart(product, quantity);
+      window.location.href = '/checkout';
+    }
+  };
 
   return (
     <div className={`modal ${isOpen ? 'active' : ''}`} onClick={onClose}>
@@ -71,14 +99,22 @@ const ProductModal = ({ isOpen, product, onClose }) => {
             
             <div className="modal-actions">
               <div className="quantity-selector">
-                <button className="qty-btn" aria-label="Decrease quantity">-</button>
-                <span className="qty-value">1 {product.unit}</span>
-                <button className="qty-btn" aria-label="Increase quantity">+</button>
+                <button 
+                  className="qty-btn" 
+                  onClick={() => handleQuantityChange('decrease')}
+                  aria-label="Decrease quantity"
+                >-</button>
+                <span className="qty-value">{quantity} {product.unit}</span>
+                <button 
+                  className="qty-btn" 
+                  onClick={() => handleQuantityChange('increase')}
+                  aria-label="Increase quantity"
+                >+</button>
               </div>
-              <button className="btn btn-add-to-cart">
-                Add to Cart - ₹{product.price}
+              <button className="btn btn-add-to-cart" onClick={handleAddToCartClick}>
+                Add to Cart - ₹{product.price * quantity}
               </button>
-              <button className="btn btn-buy-now">
+              <button className="btn btn-buy-now" onClick={handleBuyNowClick}>
                 Buy Now
               </button>
             </div>

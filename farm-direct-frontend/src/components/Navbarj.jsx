@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaLeaf, FaShoppingCart, FaUser, FaBars, FaTimes, FaSignOutAlt } from 'react-icons/fa';
 
-const Navbar = ({ user, onLogout }) => {
+const Navbar = ({ user, onLogout, cartItems }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
@@ -41,6 +41,7 @@ const Navbar = ({ user, onLogout }) => {
     { id: 'contact', label: 'Contact' },
   ];
 
+  
   return (
     <>
       <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
@@ -160,6 +161,10 @@ const Navbar = ({ user, onLogout }) => {
                     <button onClick={handleLogout} className="mobile-cta-btn logout">
                       <FaSignOutAlt /> Logout
                     </button>
+                    <button className="action-btn cart-btn">
+  <FaShoppingCart />
+  <span className="cart-count">{cartItems?.length || 0}</span> {/* ADD THIS */}
+</button>
                   </>
                 ) : (
                   <>

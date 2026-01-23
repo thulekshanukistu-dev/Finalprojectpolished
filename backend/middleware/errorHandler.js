@@ -5,7 +5,9 @@ const errorHandler = (err, req, res, next) => {
   error.message = err.message;
 
   // Log to console for dev
-  console.log(err.stack);
+  if (process.env.NODE_ENV === 'development') {
+    console.error(err.stack);
+  }
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
@@ -38,10 +40,35 @@ const errorHandler = (err, req, res, next) => {
     error = new ErrorResponse(message, 401);
   }
 
+  // Multer errors
+  if (err.name === 'MulterError') {
+    let message = 'File upload error';
+    
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      message = 'File size too large';
+    } else if (err.code === 'LIMIT_FILE_COUNT') {
+      message = 'Too many files';
+    } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      message = 'Unexpected file field';
+    }
+    
+    error = new ErrorResponse(message, 400);
+  }
+
+  // Custom error for insufficient stock
+  if (err.message && err.message.includes('Insufficient stock')) {
+    error = new ErrorResponse(err.message, 400);
+  }
+
   res.status(error.statusCode || 500).json({
     success: false,
     error: error.message || 'Server Error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    ...(process.env.NODE_ENV === 'development' && { 
+      path: req.path,
+      method: req.method,
+      timestamp: new Date().toISOString()
+    })
   });
 };
 

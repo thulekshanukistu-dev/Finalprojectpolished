@@ -10,24 +10,31 @@ const {
   cancelOrder,
   getAllOrders,
   getOrderStats
-} = require('../controllers/orderController');
-const { protect, isFarmer, authorize } = require('../middleware/auth');
+} = require('./orderController');
+const { protect, isFarmer, isAdmin } = require('../middleware/auth');
 
-// Protected routes
+// All order routes require authentication
 router.use(protect);
 
+// Order creation
 router.route('/')
   .post(createOrder);
 
+// User orders
 router.get('/myorders', getMyOrders);
-router.get('/farmerorders', isFarmer, getFarmerOrders);
+
+// Single order operations
 router.get('/:id', getOrder);
-router.put('/:id/pay', isFarmer, updateOrderToPaid);
-router.put('/:id/status', isFarmer, updateOrderStatus);
 router.put('/:id/cancel', cancelOrder);
 
+// Farmer order routes
+router.get('/farmer/orders', isFarmer, getFarmerOrders);
+router.get('/farmer/stats', isFarmer, getFarmerOrderStats);
+router.put('/:id/pay', isFarmer, updateOrderToPaid);
+router.put('/:id/status', isFarmer, updateOrderStatus);
+
 // Admin routes
-router.use(authorize('admin'));
+router.use(isAdmin);
 router.get('/admin/all', getAllOrders);
 router.get('/admin/stats', getOrderStats);
 

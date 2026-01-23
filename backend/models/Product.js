@@ -52,7 +52,8 @@ const productSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: [0, 'Rating must be at least 0'],
-    max: [5, 'Rating cannot exceed 5']
+    max: [5, 'Rating cannot exceed 5'],
+    set: val => Math.round(val * 10) / 10 // Round to 1 decimal
   },
   numReviews: {
     type: Number,
@@ -86,6 +87,29 @@ const productSchema = new mongoose.Schema({
     default: 100,
     min: [1, 'Maximum order quantity must be at least 1']
   },
+  isFeatured: {
+    type: Boolean,
+    default: false
+  },
+  isBestSeller: {
+    type: Boolean,
+    default: false
+  },
+  harvestDate: {
+    type: Date
+  },
+  expiryDate: {
+    type: Date
+  },
+  weight: {
+    type: Number,
+    min: [0, 'Weight cannot be negative']
+  },
+  dimensions: {
+    length: Number,
+    width: Number,
+    height: Number
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -105,6 +129,14 @@ productSchema.virtual('discountedPrice').get(function() {
   return this.price * (1 - this.discount / 100);
 });
 
+// Virtual for reviews (if you have a Review model)
+productSchema.virtual('reviews', {
+  ref: 'Review',
+  localField: '_id',
+  foreignField: 'product',
+  justOne: false
+});
+
 // Update timestamp on save
 productSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
@@ -113,16 +145,33 @@ productSchema.pre('save', function(next) {
 
 // Check availability based on stock
 productSchema.pre('save', function(next) {
-  this.isAvailable = this.stock > 0;
+  this.isAvailable = this.stock > 0 && this.stock >= this.minOrderQuantity;
   next();
 });
 
-// Indexes for better query performance
-productSchema.index({ name: 'text', description: 'text' });
+// Auto-calculate best seller status (if rating > 4.5 and reviews > 10)
+productSchema.pre('save', function(next) {
+  this.isBestSeller = this.rating > 4.5 && this.numReviews > 10;
+  next();
+});
+
+// Text search index for name and description
+productSchema.index({ name: 'text', description: 'text', tags: 'text' });
+
+// Other indexes for better query performance
 productSchema.index({ category: 1 });
 productSchema.index({ farmer: 1 });
 productSchema.index({ price: 1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ createdAt: -1 });
+productSchema.index({ isAvailable: 1 });
+productSchema.index({ isFeatured: 1 });
+productSchema.index({ isBestSeller: 1 });
+productSchema.index({ 'tags': 1 });
+
+// Compound indexes for common queries
+productSchema.index({ category: 1, isAvailable: 1 });
+productSchema.index({ farmer: 1, isAvailable: 1 });
+productSchema.index({ price: 1, rating: -1 });
 
 module.exports = mongoose.model('Product', productSchema);

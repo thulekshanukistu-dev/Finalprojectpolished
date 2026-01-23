@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 const {
@@ -9,34 +10,66 @@ const {
   getProductsByFarmer,
   getProductsByCategory,
   getFeaturedProducts,
-  updateStock
-} = require('../controllers/productController');
+  getBestSellers,
+  updateStock,
+  updateImages,
+  deleteImage
+} = require('./productController'); 
 const { protect, isFarmer, checkOwnership } = require('../middleware/auth');
-const { uploadMultiple, cloudinaryUpload, handleUploadError } = require('../middleware/upload');
+const { uploadMultiple, handleUploadError, cleanupTempFiles } = require('../middleware/upload');
 const Product = require('../models/Product');
 
 // Public routes
 router.get('/', getAllProducts);
 router.get('/featured', getFeaturedProducts);
+router.get('/best-sellers', getBestSellers);
 router.get('/category/:category', getProductsByCategory);
 router.get('/farmer/:farmerId', getProductsByFarmer);
 router.get('/:id', getProduct);
 
-// Protected routes
+// Protected routes (require authentication)
 router.use(protect);
 
-// Farmer routes
-router.use(isFarmer);
-
+// Farmer-only routes
 router.post('/',
+  isFarmer,
   uploadMultiple('images', 5),
   handleUploadError,
-  cloudinaryUpload,
-  createProduct
+  createProduct,
+  cleanupTempFiles
 );
 
-router.put('/:id', checkOwnership(Product), updateProduct);
-router.delete('/:id', checkOwnership(Product), deleteProduct);
-router.patch('/:id/stock', checkOwnership(Product), updateStock);
+router.put('/:id', 
+  isFarmer,
+  checkOwnership(Product),
+  updateProduct
+);
+
+router.delete('/:id', 
+  isFarmer,
+  checkOwnership(Product),
+  deleteProduct
+);
+
+router.patch('/:id/stock', 
+  isFarmer,
+  checkOwnership(Product),
+  updateStock
+);
+
+router.put('/:id/images',
+  isFarmer,
+  checkOwnership(Product),
+  uploadMultiple('images', 5),
+  handleUploadError,
+  updateImages,
+  cleanupTempFiles
+);
+
+router.delete('/:id/images/:imageIndex',
+  isFarmer,
+  checkOwnership(Product),
+  deleteImage
+);
 
 module.exports = router;

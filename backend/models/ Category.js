@@ -43,6 +43,14 @@ const categorySchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  metaTitle: {
+    type: String,
+    maxlength: [60, 'Meta title cannot exceed 60 characters']
+  },
+  metaDescription: {
+    type: String,
+    maxlength: [160, 'Meta description cannot exceed 160 characters']
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -60,8 +68,10 @@ categorySchema.pre('save', function(next) {
   if (this.isModified('name')) {
     this.slug = this.name
       .toLowerCase()
-      .replace(/[^\w\s]/gi, '')
-      .replace(/\s+/g, '-');
+      .replace(/[^\w\s-]/g, '') // Remove special characters
+      .replace(/\s+/g, '-')     // Replace spaces with hyphens
+      .replace(/-+/g, '-')      // Replace multiple hyphens with single
+      .trim();
   }
   next();
 });
@@ -71,5 +81,18 @@ categorySchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// Update product count when products are added/removed (you'd need to handle this in product controller)
+categorySchema.statics.updateProductCount = async function(categoryId) {
+  const Product = mongoose.model('Product');
+  const count = await Product.countDocuments({ category: categoryId });
+  await this.findByIdAndUpdate(categoryId, { productCount: count });
+};
+
+// Indexes
+categorySchema.index({ slug: 1 });
+categorySchema.index({ isActive: 1 });
+categorySchema.index({ sortOrder: 1 });
+categorySchema.index({ parentCategory: 1 });
 
 module.exports = mongoose.model('Category', categorySchema);
