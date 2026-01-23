@@ -825,7 +825,6 @@
 
 // export default App;
 
-
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Navbar from './components/Navbarj.jsx';
@@ -838,7 +837,8 @@ import Footer from './components/Footer';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
-import { productAPI, contactAPI } from './services/api.jsx';
+import ForgotPassword from './components/ForgotPassword';
+import { authAPI, productAPI, contactAPI } from './services/api.jsx';
 import './styles/App.css';
 import './styles/Auth.css';
 
@@ -850,15 +850,29 @@ function App() {
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
 
+  // Check if user is logged in on app start
   useEffect(() => {
-    fetchProducts();
-    
-    // Check if user is logged in
     const savedUser = localStorage.getItem('user');
-    if (savedUser) {
+    const savedToken = localStorage.getItem('token');
+    
+    if (savedUser && savedToken) {
       setUser(JSON.parse(savedUser));
+      // Verify token is still valid
+      verifyToken();
     }
+    
+    fetchProducts();
   }, []);
+
+  const verifyToken = async () => {
+    try {
+      const response = await authAPI.getMe();
+      setUser(response.data);
+    } catch (err) {
+      // Token invalid, logout user
+      handleLogout();
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -866,15 +880,85 @@ function App() {
       const response = await productAPI.getProducts();
       
       if (response.success) {
-        setProducts(response.products);
+        setProducts(response.data || []);
       } else {
         setError('Failed to load products');
       }
     } catch (err) {
       console.error('Error fetching products:', err);
-      setError('Network error. Using sample data.');
+      setError('Network error. Please check if backend is running.');
+      // Load sample data as fallback
+      loadSampleProducts();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSampleProducts = () => {
+    // Your existing sample products data
+    const sampleProducts = [
+      {
+        _id: 1,
+        name: 'Organic Tomatoes',
+        category: 'vegetables',
+        price: 80,
+        unit: 'kg',
+        farmer: 'Kumar Farm',
+        rating: 4.5,
+        stock: 25,
+        image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+        description: 'Fresh organic tomatoes grown without any pesticides or chemicals.'
+      },
+      // ... rest of your sample products
+    ];
+    setProducts(sampleProducts);
+  };
+
+  const handleLogin = async (email, password) => {
+    try {
+      const response = await authAPI.login({ email, password });
+      
+      if (response.success) {
+        const { token, user } = response;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        setUser(user);
+        return { success: true };
+      } else {
+        return { success: false, message: response.message };
+      }
+    } catch (error) {
+      return { success: false, message: error.message || 'Login failed' };
+    }
+  };
+
+  const handleRegister = async (userData) => {
+    try {
+      const response = await authAPI.register(userData);
+      
+      if (response.success) {
+        const { token, user } = response;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        setUser(user);
+        return { success: true };
+      } else {
+        return { success: false, message: response.message };
+      }
+    } catch (error) {
+      return { success: false, message: error.message || 'Registration failed' };
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
     }
   };
 
@@ -886,29 +970,12 @@ function App() {
   const handleContactSubmit = async (formData) => {
     try {
       const response = await contactAPI.submitContact(formData);
-      alert(response.message);
+      alert(response.message || 'Message sent successfully!');
       return { success: true };
     } catch (error) {
-      alert('Failed to send message. Please try again.');
+      alert(error.message || 'Failed to send message. Please try again.');
       return { success: false };
     }
-  };
-
-  const handleLogin = async (email, password) => {
-    // For demo - in real app, use authAPI.login()
-    const user = { 
-      email, 
-      name: email.split('@')[0],
-      role: email.includes('farmer') ? 'farmer' : 'customer' 
-    };
-    setUser(user);
-    localStorage.setItem('user', JSON.stringify(user));
-    return { success: true };
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
   };
 
   const handleModalClose = () => {
@@ -921,11 +988,17 @@ function App() {
       <div className="app">
         <Routes>
           <Route path="/login" element={
-            user ? <Navigate to="/" /> : <Login onLogin={handleLogin} />
+            user ? <Navigate to="/" /> : 
+            <Login onLogin={handleLogin} />
           } />
           
           <Route path="/register" element={
-            user ? <Navigate to="/" /> : <Register />
+            user ? <Navigate to="/" /> : 
+            <Register onRegister={handleRegister} />
+          } />
+          
+          <Route path="/forgot-password" element={
+            <ForgotPassword />
           } />
           
           <Route path="/dashboard" element={
@@ -946,9 +1019,15 @@ function App() {
                 
                 <section id="marketplace">
                   {loading ? (
-                    <div className="loading">Loading products...</div>
+                    <div className="loading-spinner">
+                      <div className="spinner"></div>
+                      <p>Loading fresh products...</p>
+                    </div>
                   ) : error ? (
-                    <div className="error">{error}</div>
+                    <div className="error-message">
+                      <p>{error}</p>
+                      <button onClick={fetchProducts}>Retry</button>
+                    </div>
                   ) : (
                     <Marketplace 
                       products={products} 
